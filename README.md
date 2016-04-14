@@ -1,6 +1,6 @@
 # Authentication in Golang with JWT
 
-Authenticate a Golang API with JSON Web Tokens (JWT).
+Authenticate a Golang API with JSON Web Tokens (JWT). This repo contains the code samples for the [Authentication in Golang with JWT](https://auth0.com/blog/2016/04/13/authentication-in-golang/) article.
 
 ## Setup
 
