@@ -60,7 +60,8 @@ var Home = React.createClass({
 var LoggedIn = React.createClass({
   logout : function(){
     localStorage.removeItem('userToken');
-    this.props.lock.logout({returnTo:'http://localhost:3000'})
+    this.props.lock.logout({ ref: 'http://localhost:3000' });
+    window.location.replace("http://localhost:3000");
   },
 
   getInitialState: function() {
