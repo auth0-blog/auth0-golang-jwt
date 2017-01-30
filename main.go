@@ -56,7 +56,7 @@ func main() {
 	http.ListenAndServe(":3000", handlers.LoggingHandler(os.Stdout, r))
 }
 
-var mySigningKey = "secret"
+var mySigningKey = []byte("secret")
 
 // Handlers
 var GetTokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
