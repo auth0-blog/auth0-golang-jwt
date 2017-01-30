@@ -1,15 +1,15 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/auth0/go-jwt-middleware"
-	"github.com/dgrijalva/jwt-go"
+	jwtmiddleware "github.com/auth0/go-jwt-middleware"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
@@ -56,7 +56,7 @@ func main() {
 	http.ListenAndServe(":3000", handlers.LoggingHandler(os.Stdout, r))
 }
 
-var mySigningKey = []byte("secret")
+var mySigningKey = "secret"
 
 // Handlers
 var GetTokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -81,9 +81,9 @@ var ValidateToken = jwtmiddleware.New(jwtmiddleware.Options{
 
 var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
 	ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-		decoded, err := base64.URLEncoding.DecodeString(os.Getenv("AUTH0_CLIENT_SECRET"))
-		if err != nil {
-			return nil, err
+		decoded := []byte(os.Getenv("AUTH0_CLIENT_SECRET"))
+		if len(decoded) == 0 {
+			return nil, errors.New("Missing Client Secret")
 		}
 		return decoded, nil
 	},
