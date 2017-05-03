@@ -1,57 +1,73 @@
 var App = React.createClass({
   componentWillMount: function() {
     this.setupAjax();
-    this.createLock();
-    this.setState({idToken: this.getIdToken()})
-  },
-  createLock: function() {
-    this.lock = new Auth0Lock(this.props.clientId, this.props.domain);
+    this.parseHash();
+    this.setState();
   },
   setupAjax: function() {
     $.ajaxSetup({
       'beforeSend': function(xhr) {
-        if (localStorage.getItem('userToken')) {
+        if (localStorage.getItem('access_token')) {
           xhr.setRequestHeader('Authorization',
-                'Bearer ' + localStorage.getItem('userToken'));
+                'Bearer ' + localStorage.getItem('access_token'));
         }
       }
     });
   },
-  getIdToken: function() {
-    var idToken = localStorage.getItem('userToken');
-    var authHash = this.lock.parseHash(window.location.hash);
-    if (!idToken && authHash) {
-      if (authHash.id_token) {
-        idToken = authHash.id_token
-        localStorage.setItem('userToken', authHash.id_token);
+  parseHash: function(){
+    this.auth0 = new auth0.WebAuth({
+      domain:       AUTH0_DOMAIN,
+      clientID:     AUTH0_CLIENT_ID
+    });
+    this.auth0.parseHash(window.location.hash, function(err, authResult) {
+      if (err) {
+        return console.log(err);
       }
-      if (authHash.error) {
-        console.log("Error signing in", authHash);
+      console.log(authResult);
+      if(authResult !== null && authResult.accessToken !== null && authResult.idToken !== null){
+        localStorage.setItem('access_token', authResult.accessToken);
+        localStorage.setItem('id_token', authResult.idToken);
+        localStorage.setItem('profile', JSON.stringify(authResult.idTokenPayload));
       }
+    });
+  },
+  setState: function(){
+    var idToken = localStorage.getItem('id_token');
+    if(idToken){
+      this.loggedIn = true;
+    } else {
+      this.loggedIn = false;
     }
-    return idToken;
   },
   render: function() {
-    if (this.state.idToken) {
-      return (<LoggedIn lock={this.lock} idToken={this.state.idToken} />);
+    
+    if (this.loggedIn) {
+      return (<LoggedIn />);
     } else {
-      return (<Home lock={this.lock} />);
+      return (<Home />);
     }
   }
 });
 
 var Home = React.createClass({
-  showLock: function() {
-    this.props.lock.show();
+  authenticate: function(){
+    this.webAuth = new auth0.WebAuth({
+      domain:       AUTH0_DOMAIN,
+      clientID:     AUTH0_CLIENT_ID,
+      scope:        'openid profile',
+      audience:     AUTH0_API_AUDIENCE,
+      responseType: 'token id_token',
+      redirectUri : AUTH0_CALLBACK_URL
+    });
+    this.webAuth.authorize();
   },
-
   render: function() {
     return (
     <div className="container">
       <div className="col-xs-12 jumbotron text-center">
         <h1>We R VR</h1>
         <p>Provide valuable feedback to VR experience developers.</p>
-        <a onClick={this.showLock} className="btn btn-primary btn-lg btn-login btn-block">Sign In</a>
+        <a onClick={this.authenticate} className="btn btn-primary btn-lg btn-login btn-block">Sign In</a>
       </div>
     </div>);
   }
@@ -59,28 +75,18 @@ var Home = React.createClass({
 
 var LoggedIn = React.createClass({
   logout : function(){
-    localStorage.removeItem('userToken');
-    this.props.lock.logout({returnTo:'http://localhost:3000'})
+    localStorage.removeItem('id_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('profile');
   },
 
   getInitialState: function() {
     return {
-      profile: null,
-      products: null
+      products: []
     }
   },
-
   componentDidMount: function() {
-    this.props.lock.getProfile(this.props.idToken, function (err, profile) {
-      if (err) {
-        console.log("Error loading the Profile", err);
-        alert("Error loading the Profile");
-      }
-      this.setState({profile: profile});
-    }.bind(this));
-
     this.serverRequest = $.get('http://localhost:3000/products', function (result) {
-      console.log(result)
       this.setState({
         products: result,
       });
@@ -88,21 +94,19 @@ var LoggedIn = React.createClass({
   },
 
   render: function() {
-    if (this.state.profile) {
-      return (
-        <div className="col-lg-12">
-          <span className="pull-right">{this.state.profile.nickname} <a onClick={this.logout}>Log out</a></span>
-          <h2>Welcome to We R VR</h2>
-          <p>Below you'll find the latest games that need feedback. Please provide honest feedback so developers can make the best games.</p>
-          <div className="row">
-          {this.state.products.map(function(product, i){
-            return <Product key={i} product={product} />
-          })}
-          </div>
-        </div>);
-    } else {
-      return (<div>Loading...</div>);
-    }
+    return (
+      <div className="col-lg-12">
+        <span className="pull-right"><a onClick={this.logout}>Log out</a></span>
+        <h2>Welcome to We R VR</h2>
+        <p>Below you'll find the latest games that need feedback. Please provide honest feedback so developers can make the best games.</p>
+        <div className="row">
+          
+        {this.state.products.map(function(product, i){
+          return <Product key={i} product={product} />
+        })}
+
+        </div>
+      </div>);
   }
 });
 
@@ -145,5 +149,5 @@ var Product = React.createClass({
   }
 })
 
-ReactDOM.render(<App clientId={AUTH0_CLIENT_ID} domain={AUTH0_DOMAIN} />,
+ReactDOM.render(<App />,
   document.getElementById('app'));

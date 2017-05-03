@@ -2,17 +2,14 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
-	"log"
+	"fmt"
 	"net/http"
 	"os"
-	"time"
 
-	jwtmiddleware "github.com/auth0/go-jwt-middleware"
-	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/auth0-community/auth0"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/joho/godotenv"
+	jose "gopkg.in/square/go-jose.v2"
 )
 
 type Product struct {
@@ -32,70 +29,38 @@ var products = []Product{
 }
 
 func main() {
-
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
 	r := mux.NewRouter()
 
 	r.Handle("/", http.FileServer(http.Dir("./views/")))
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 
-	// Auth0 Token
-	r.Handle("/status", StatusHandler).Methods("GET")
-	r.Handle("/products", jwtMiddleware.Handler(ProductsHandler)).Methods("GET")
-	r.Handle("/products/{slug}/feedback", jwtMiddleware.Handler(AddFeedbackHandler)).Methods("POST")
-
-	// Manual Token
-	r.Handle("/get-token", GetTokenHandler).Methods("GET")
-	r.Handle("/manual/products/", ValidateToken.Handler(ProductsHandler)).Methods("GET")
-	r.Handle("/manual/products/{slug}/feedback", ValidateToken.Handler(AddFeedbackHandler)).Methods("POST")
+	r.Handle("/products", authMiddleware(ProductsHandler)).Methods("GET")
+	r.Handle("/products/{slug}/feedback", authMiddleware(AddFeedbackHandler)).Methods("POST")
 
 	http.ListenAndServe(":3000", handlers.LoggingHandler(os.Stdout, r))
 }
 
-var mySigningKey = []byte("secret")
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		secret := []byte("{YOUR-AUTH0-API-SECRET}")
+		secretProvider := auth0.NewKeyProvider(secret)
+		audience := "{YOUR-AUTH0-API-AUDIENCE}"
 
-// Handlers
-var GetTokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	token := jwt.New(jwt.SigningMethodHS256)
-	claims := token.Claims.(jwt.MapClaims)
-	claims["admin"] = true
-	claims["name"] = "Ado Kukic"
-	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
-	tokenString, err := token.SignedString(mySigningKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	w.Write([]byte(tokenString))
-})
+		configuration := auth0.NewConfiguration(secretProvider, audience, "https://{YOUR-AUTH0-DOMAIN}.auth0.com/", jose.HS256)
+		validator := auth0.NewValidator(configuration)
 
-var ValidateToken = jwtmiddleware.New(jwtmiddleware.Options{
-	ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-		return mySigningKey, nil
-	},
-	SigningMethod: jwt.SigningMethodHS256,
-})
+		token, err := validator.ValidateRequest(r)
 
-var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
-	ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-		decoded := []byte(os.Getenv("AUTH0_CLIENT_SECRET"))
-		if len(decoded) == 0 {
-			return nil, errors.New("Missing Client Secret")
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("Token is not valid:", token)
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Unauthorized"))
+		} else {
+			next.ServeHTTP(w, r)
 		}
-		return decoded, nil
-	},
-})
-
-var NotImplemented = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Not Implemented"))
-})
-
-var StatusHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("API is up and running"))
-})
+	})
+}
 
 var ProductsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	payload, _ := json.Marshal(products)
