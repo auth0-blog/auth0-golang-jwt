@@ -44,7 +44,7 @@ func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		secret := []byte("{YOUR-AUTH0-API-SECRET}")
 		secretProvider := auth0.NewKeyProvider(secret)
-		audience := "{YOUR-AUTH0-API-AUDIENCE}"
+		audience := []string{"{YOUR-AUTH0-API-AUDIENCE}"}
 
 		configuration := auth0.NewConfiguration(secretProvider, audience, "https://{YOUR-AUTH0-DOMAIN}.auth0.com/", jose.HS256)
 		validator := auth0.NewValidator(configuration)
